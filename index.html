@@ -25,6 +25,7 @@
             --button-bg: #3a3a3a;
             --button-hover-bg: #4a4a4a;
             --accent-color: #007BFF;
+            --success-color: #28a745;
             --glow-color: var(--accent-color);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,8 +37,8 @@
         .board-area { flex-grow: 1; flex-shrink: 1; max-width: 75vh; min-width: 390px; display: flex; flex-direction: column; gap: 1rem; }
         #board-container { position: relative; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
         #board { width: 100%; border: 1px solid var(--border-color); }
-        #board-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.65); z-index: 10; display: none; justify-content: center; align-items: center; text-align: center; backdrop-filter: blur(3px); }
-        #overlay-text { font-size: 2.5rem; font-weight: 700; color: #fff; text-shadow: 0 0 15px rgba(0,0,0,0.7); }
+        #board-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.65); z-index: 10; display: none; justify-content: center; align-items: center; text-align: center; }
+        #overlay-text { font-size: 3rem; font-weight: 700; color: #fff; text-shadow: 0 0 15px rgba(0,0,0,0.7); }
         .highlight-source { box-shadow: inset 0 0 0 4px var(--highlight-color); }
         .move-dot { position: absolute; width: 50%; height: 50%; background: var(--dot-color); border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
         .player-bar { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.25rem; background: var(--panel-secondary-bg-color); border-radius: 8px; transition: box-shadow 0.4s ease, border-color 0.4s ease; border: 1px solid transparent; }
@@ -49,6 +50,8 @@
         #rematch-btn { width: auto; padding-left: 1rem; padding-right: 1rem; font-size: 1rem; font-weight: 500; color: var(--text-color); }
         .btn-icon { width: 44px; }
         .btn-icon:hover, #rematch-btn:hover { background-color: var(--button-hover-bg); transform: translateY(-2px); }
+        .btn-icon.accept-undo { background-color: var(--success-color); }
+        .btn-icon.accept-undo:hover { background-color: #218838; }
         .btn-icon i { color: var(--text-secondary-color); transition: color 0.2s ease-out; }
         .btn-icon:hover i { color: var(--text-color); }
         .btn-icon:disabled, #rematch-btn:disabled { opacity: 0.5; cursor: not-allowed; background-color: var(--button-bg) !important; transform: none; }
@@ -82,6 +85,7 @@
         .btn:hover { background-color: var(--button-hover-bg); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         .btn-primary { background-color: var(--accent-color); color: white; }
         .btn-primary:hover { background-color: #0056b3; }
+        #room-code-display { font-size: 2rem; font-weight: bold; background: var(--bg-color); padding: 1rem; border-radius: 6px; margin: 1.5rem 0; letter-spacing: 4px; user-select: all; border: 1px dashed var(--border-color); }
         #room-code-input { width: 100%; padding: 0.75rem; font-size: 1.5rem; text-align: center; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 1rem; letter-spacing: 4px; font-weight: bold; text-transform: uppercase; background-color: var(--bg-color); color: var(--text-color); }
         .hidden { display: none !important; }
         @media (max-width: 1100px) { .game-layout { flex-direction: column; } .side-dashboard { width: 100%; } .board-area { max-width: 100%; } }
@@ -101,10 +105,9 @@
                 </div>
                 <div id="player-bar" class="player-bar"><div class="player-info"><i class="fas fa-user-circle"></i><span>You</span></div><div id="white-timer" class="timer">01:00</div></div>
                 <div class="controls-area">
-                    <button id="undo-btn" class="btn-icon control-action" title="Undo Move"><i class="fas fa-undo"></i></button>
-                    <button id="redo-btn" class="btn-icon control-action" title="Redo Move"><i class="fas fa-redo"></i></button>
+                    <button id="undo-btn" class="btn-icon control-action" title="Request Undo"><i class="fas fa-undo"></i></button>
+                    <button id="share-game-btn" class="btn-icon control-action hidden" title="Share Game"><i class="fas fa-share-alt"></i></button>
                     <button id="flip-board-btn" class="btn-icon control-action" title="Flip Board"><i class="fas fa-sync-alt"></i></button>
-                    <button id="share-game-btn" class="btn-icon control-action hidden" title="Copy Join Link"><i class="fas fa-share-alt"></i></button>
                     <button id="new-game-btn" class="btn-icon control-action" title="New Game (Disconnects)"><i class="fas fa-plus-square"></i></button>
                     <button id="draw-btn" class="btn-icon control-action" title="Offer Draw"><i class="fas fa-handshake"></i></button>
                     <button id="resign-btn" class="btn-icon control-action" title="Resign"><i class="fas fa-flag"></i></button>
@@ -129,6 +132,7 @@
 
     <div id="game-mode-modal" class="modal"><div class="modal-content"><h2>Welcome to Sintha Chess</h2><p>Play with 1 minute per move. Choose to play online or locally.</p><div class="btn-group"><button id="online-multiplayer-btn" class="btn btn-primary">Online Multiplayer</button><button id="pass-and-play-btn" class="btn">Pass & Play (Local)</button></div></div></div>
     <div id="online-modal" class="modal"><div class="modal-content"><h2>Online Multiplayer</h2><p>Create a private room to play with a friend, or join one with their code.</p><div class="btn-group"><button id="create-game-btn" class="btn btn-primary">Create Game</button><button id="join-game-btn" class="btn">Join Game</button></div><button id="online-back-btn" class="btn" style="margin-top: 1.5rem;">Back</button></div></div>
+    <div id="create-room-modal" class="modal"><div class="modal-content"><h2>Your Room Code</h2><p>Share this code with your friend. Waiting for them to connect...</p><div id="room-code-display"></div><button id="copy-code-btn" class="btn"><i class="fas fa-link"></i> Copy Join Link</button></div></div>
     <div id="join-room-modal" class="modal"><div class="modal-content"><h2>Join Game</h2><input type="text" id="room-code-input" placeholder="Enter Code" maxlength="6"><button id="join-room-submit-btn" class="btn btn-primary">Join</button></div></div>
     <div id="game-over-modal" class="modal"><div class="modal-content"><h2 id="game-over-message"></h2><button id="play-again-btn" class="btn btn-primary" style="margin-top: 1.5rem;">Main Menu</button></div></div>
 
@@ -150,18 +154,18 @@
     // --- START FIREBASE CONFIG ---
     // PASTE YOUR FIREBASE CONFIGURATION OBJECT HERE.
     const firebaseConfig = {
-        apiKey: "AIzaSyACRWhlLW3fGU1VLiAzRcopMRLoFdufAG8",
-        authDomain: "chat-b24b5.firebaseapp.com",
-        databaseURL: "https://chat-b24b5-default-rtdb.firebaseio.com",
-        projectId: "chat-b24b5",
-        storageBucket: "chat-b24b5.firebasestorage.app",
-        messagingSenderId: "180728290458",
-        appId: "1:180728290458:web:bc16d897749a1206851323",
-        measurementId: "G-Q56QGQPRFY"
+      apiKey: "AIzaSyACRWhlLW3fGU1VLiAzRcopMRLoFdufAG8",
+      authDomain: "chat-b24b5.firebaseapp.com",
+      databaseURL: "https://chat-b24b5-default-rtdb.firebaseio.com",
+      projectId: "chat-b24b5",
+      storageBucket: "chat-b24b5.firebasestorage.app",
+      messagingSenderId: "180728290458",
+      appId: "1:180728290458:web:bc16d897749a1206851323",
+      measurementId: "G-Q56QGQPRFY"
     };
     // --- END FIREBASE CONFIG ---
     
-    if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY") {
+    if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_API_KEY")) {
         firebase.initializeApp(firebaseConfig);
     }
     const database = firebase.database();
@@ -173,12 +177,11 @@
         const MOVE_TIME = 60; // 60 seconds per move
         let whiteTimer, blackTimer, whiteTime = MOVE_TIME, blackTime = MOVE_TIME;
         let isAudioUnlocked = false;
-        let redoStack = []; 
         let roomRef = null, roomCode = null;
         let gameListener = null, chatListener = null;
 
         const $status = $('#status'), $moveHistory = $('#move-history'), $boardEl = $('#board');
-        const $undoBtn = $('#undo-btn'), $redoBtn = $('#redo-btn');
+        const $undoBtn = $('#undo-btn');
         const $rematchBtn = $('#rematch-btn');
         const sounds = { move: $('#sound-move')[0], capture: $('#sound-capture')[0], check: $('#sound-check')[0], gameStart: $('#sound-game-start')[0], gameEnd: $('#sound-game-end')[0] };
 
@@ -201,9 +204,9 @@
         
         // --- PLAYER MOVE LOGIC ---
         function onSquareClick() {
-            if (game.game_over()) return;
+            if (game.game_over()) return; 
             const square = $(this).data('square');
-            if (gameMode === 'online' && game.turn() !== playerColor) return;
+            if ((gameMode !== 'pass' && game.turn() !== playerColor)) return;
             const pieceOnSquare = game.get(square);
 
             if (fromSquare !== null) {
@@ -211,11 +214,10 @@
                 const moveResult = game.move(move);
 
                 if (moveResult) { // Valid move
-                    redoStack = []; // Clear redo stack on a new move
                     fromSquare = null;
                     removeHighlights();
                     if (gameMode === 'online' && roomRef) {
-                        roomRef.update({ fen: game.fen() });
+                        roomRef.update({ fen: game.fen(), undoRequest: null }); // Clear any pending undo requests on a new move
                     }
                     updateGameUi(false, moveResult); // It's a local move
                     return;
@@ -235,7 +237,7 @@
         function startTimers() { stopTimers(); if (game.turn() === 'w') { whiteTimer = setInterval(updateWhiteTimer, 1000); } else { blackTimer = setInterval(updateBlackTimer, 1000); }}
         function updateWhiteTimer() { whiteTime--; $('#white-timer').text(formatTime(whiteTime)); if (whiteTime <= 0) handleTimeOut('w'); }
         function updateBlackTimer() { blackTime--; $('#black-timer').text(formatTime(blackTime)); if (blackTime <= 0) handleTimeOut('b'); }
-        function handleTimeOut(color) { const message = (color === 'w' ? 'Black' : 'White') + ' wins on time.'; if (gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: message, fen: game.fen() }); } else { handleLocalGameOver(message); } }
+        function handleTimeOut(color) { stopTimers(); const message = (color === 'w' ? 'Black' : 'White') + ' wins on time.'; if (gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: message, fen: game.fen() }); } else { handleLocalGameOver(message); } }
         function formatTime(seconds) { if (seconds < 0) seconds = 0; const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`; }
         
         // --- UNIFIED UI UPDATE FUNCTION ---
@@ -249,7 +251,7 @@
             board.position(game.fen());
             updateStatusText();
             updateMoveHistory();
-            updateControlButtons();
+            updateUndoButtonState();
             
             if (moveResult && !moveResult.rematch) playSound(moveResult.flags.includes('c') ? 'capture' : 'move');
             if (game.in_check()) playSound('check');
@@ -293,31 +295,27 @@
             removeHighlights();
             showModal('#game-over-modal');
             $('#game-over-message').text(message);
-            if (roomRef) {
-                cleanupFirebaseListeners();
-            }
+            cleanupFirebaseListeners();
         }
 
         function showRematchControls() {
             $('.control-action').addClass('hidden');
             $rematchBtn.removeClass('hidden');
-            if (gameMode !== 'online') {
-                $rematchBtn.text('Play Again');
-            }
+            if (gameMode !== 'online') { $rematchBtn.text('Play Again'); }
         }
 
         function resetForRematch() {
             game.reset();
-            redoStack = [];
             whiteTime = MOVE_TIME;
             blackTime = MOVE_TIME;
             
             $('#board-overlay').fadeOut(200);
             $rematchBtn.addClass('hidden').prop('disabled', false).text('Rematch');
             $('.control-action').removeClass('hidden');
+            $('#flip-board-btn').hide(); // Keep it hidden
             if (gameMode === 'online') $('#share-game-btn').removeClass('hidden');
-            
-            updateGameUi(true, {rematch: true}); // Use `true` to prevent re-sending state
+
+            updateGameUi(true, {rematch: true}); 
             playSound('gameStart');
         }
 
@@ -340,26 +338,22 @@
         function cleanupAndResetState() {
             stopTimers();
             game.reset(); 
-            whiteTime = MOVE_TIME; 
-            blackTime = MOVE_TIME; 
-            fromSquare = null; 
-            redoStack = []; 
-            roomCode = null; 
-            gameMode = null;
+            whiteTime = MOVE_TIME; blackTime = MOVE_TIME; 
+            fromSquare = null; roomCode = null; gameMode = null;
             $('#white-timer').text(formatTime(whiteTime)); 
             $('#black-timer').text(formatTime(blackTime));
-            $moveHistory.html(''); 
-            $('#chat-log').html(''); 
+            $moveHistory.html(''); $('#chat-log').html(''); 
             removeHighlights(); 
             cleanupFirebaseListeners();
+            $('#flip-board-btn').show();
+            $('#share-game-btn').addClass('hidden');
         }
         
         function startGame(mode, options = {}) {
-            cleanupAndResetState();
             gameMode = mode; 
             playerColor = options.color || 'w'; 
             
-            if (options.fen) { game.load(options.fen); }
+            if (options.fen) { game.load(options.fen); } else { game.reset(); }
             whiteTime = MOVE_TIME; blackTime = MOVE_TIME;
 
             const boardConfig = { position: game.fen(), pieceTheme: 'https://lichess1.org/assets/piece/staunty/{piece}.svg', draggable: false, moveSpeed: 'slow', snapSpeed: 50 };
@@ -372,32 +366,30 @@
             updateGameUi(false, null);
             $('#game-area').removeClass('hidden'); 
             playIntroAnimation(); 
+            playSound('gameStart');
             
+            // Per request, hide flip button after game starts and manage share button
+            $('#flip-board-btn').hide();
             if (mode === 'online') { 
                 $('#share-game-btn').removeClass('hidden');
                 $('.tab-btn[data-tab="chat"]').show(); 
                 $('.tab-btn[data-tab="chat"]').click(); 
-                if (options.listen) listenToRoomChanges();
+                listenToRoomChanges();
             } else { 
                 $('#share-game-btn').addClass('hidden');
                 $('.tab-btn[data-tab="chat"]').hide(); 
                 $('.tab-btn[data-tab="moves"]').addClass('active').click(); 
-                playSound('gameStart');
             }
             
             $(window).trigger('resize');
         }
         
-        function updateControlButtons() {
-            const isOnline = gameMode === 'online';
-            const gameStarted = game.history().length > 0;
-
-            // Undo is disabled in online mode, or if there's no history.
-            $undoBtn.prop('disabled', isOnline || !gameStarted);
-            // Redo is disabled in online mode, or if the redo stack is empty.
-            $redoBtn.prop('disabled', isOnline || redoStack.length === 0);
-            // *** FIX: Flip button is disabled once the game has started. ***
-            $('#flip-board-btn').prop('disabled', gameStarted);
+        function updateUndoButtonState() {
+            if (gameMode !== 'online' || game.game_over()) {
+                $undoBtn.prop('disabled', true).removeClass('accept-undo').html('<i class="fas fa-undo"></i>').attr('title', 'Undo unavailable');
+                return;
+            }
+            // Logic for enabling/disabling is handled within the Firebase listener (listenToRoomChanges)
         }
         
         // --- FIREBASE ONLINE LOGIC ---
@@ -411,47 +403,53 @@
         }
 
         function handleCreateRoom() {
-            hideModal('#online-modal');
+            cleanupAndResetState();
             roomCode = Math.floor(100000 + Math.random() * 900000).toString();
             roomRef = database.ref('rooms/' + roomCode);
+            playerColor = 'w';
+
+            // Show board and modal immediately for the host
+            startGame('online', { color: 'w' });
             
-            const initialRoomState = { status: 'waiting', fen: new Chess().fen(), rematchOffer: null, createdAt: firebase.database.ServerValue.TIMESTAMP };
+            const joinLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+            $('#room-code-display').text(roomCode);
+            $('#create-room-modal .modal-content p').text('Share this code or link with your friend. The game will start when they join.');
+            $('#copy-code-btn').off('click').on('click', () => { navigator.clipboard.writeText(joinLink).then(() => alert('Join link copied!')); });
             
+            hideModal('#online-modal', () => showModal('#create-room-modal'));
+
+            const initialRoomState = { status: 'waiting', fen: new Chess().fen(), rematchOffer: null, undoRequest: null, createdAt: firebase.database.ServerValue.TIMESTAMP };
             roomRef.set(initialRoomState).then(() => {
                 roomRef.onDisconnect().remove();
-                startGame('online', { color: 'w', listen: true });
-                $('#overlay-text').html(`Waiting for opponent...<br><br><span style="font-size: 1rem; font-weight: 400;">Share Code: ${roomCode}</span>`);
-                $('#board-overlay').fadeIn(0);
                 
-                gameListener = roomRef.on('value', snapshot => {
+                // This listener just waits for the opponent to join
+                const joinListener = roomRef.on('value', snapshot => {
                     const data = snapshot.val();
                     if (data && data.status === 'active') {
-                        roomRef.off('value', gameListener); // Stop this specific listener
-                        gameListener = null;
-                        roomRef.onDisconnect().update({ status: 'disconnected', result: 'Opponent disconnected.' });
-                        $('#board-overlay').fadeOut(300);
-                        playSound('gameStart');
-                        listenToRoomChanges(); // Start the main game listener
+                        roomRef.off('value', joinListener); // Stop this listener
+                        hideModal('#create-room-modal'); // Hide waiting modal
+                        // The main game listener `listenToRoomChanges` is already active from startGame()
                     }
                 });
             }).catch(err => { alert("Error creating room: " + err.message); });
         }
 
-        function handleJoinRoom(joinCode) {
-            const enteredCode = (joinCode || $('#room-code-input').val()).trim().toUpperCase();
+        function handleJoinRoom(codeToJoin) {
+            const enteredCode = codeToJoin || $('#room-code-input').val().trim().toUpperCase();
             if (enteredCode.length !== 6) { alert('Please enter a valid 6-digit room code.'); return; }
-            
+            cleanupAndResetState();
             roomCode = enteredCode;
             roomRef = database.ref('rooms/' + roomCode);
+            playerColor = 'b';
             
             roomRef.once('value').then(snapshot => {
                 const data = snapshot.val();
                 if (data && data.status === 'waiting') {
                     roomRef.update({ status: 'active' }).then(() => {
                         roomRef.onDisconnect().update({ status: 'disconnected', result: 'Opponent disconnected.' });
-                        hideModal('#join-room-modal');
-                        startGame('online', { color: 'b', fen: data.fen, listen: true });
-                        playSound('gameStart');
+                        hideModal('#join-room-modal', () => {
+                            startGame('online', { color: 'b', fen: data.fen });
+                        });
                     });
                 } else {
                     alert('Room not found, is full, or has already started.');
@@ -461,13 +459,22 @@
         }
 
         function listenToRoomChanges() {
-            if (!roomRef || gameListener) return; // Prevent multiple listeners
-            
+            if (!roomRef) return; 
             gameListener = roomRef.on('value', snapshot => {
                 const data = snapshot.val();
                 if (!data || gameMode !== 'online') return;
                 
-                // Handle Rematch Logic
+                // --- Handle Undo Request Logic ---
+                if (data.undoRequest && data.undoRequest !== playerColor && !game.game_over()) {
+                    $undoBtn.prop('disabled', false).addClass('accept-undo').attr('title', 'Accept Undo Request').data('action', 'accept').html('<i class="fas fa-check"></i>');
+                } else {
+                    $undoBtn.removeClass('accept-undo').data('action', 'request').html('<i class="fas fa-undo"></i>');
+                    const canRequestUndo = game.history().length > 0 && game.turn() !== playerColor && !data.undoRequest;
+                    $undoBtn.prop('disabled', !canRequestUndo).attr('title', canRequestUndo ? 'Request Undo' : 'Cannot request undo now');
+                    if(data.undoRequest === playerColor) $undoBtn.attr('title', 'Undo request sent');
+                }
+
+                // --- Handle Rematch Logic ---
                 const startingFen = new Chess().fen();
                 if (game.game_over() && data.fen === startingFen && data.status === 'active') {
                     resetForRematch();
@@ -475,7 +482,7 @@
                     $rematchBtn.text('Accept Rematch').prop('disabled', false);
                 }
 
-                // Handle Game Over states
+                // --- Handle Game Over states ---
                 if (data.status === 'finished' && !game.game_over()) {
                      game.load(data.fen);
                      updateGameUi(true, null);
@@ -483,7 +490,7 @@
                      handleDisconnection(data.result || "Opponent disconnected.");
                 }
 
-                // Handle normal moves
+                // --- Handle normal moves / accepted undos ---
                 if (data.status === 'active' && !game.game_over() && game.fen() !== data.fen) {
                     const oldFen = game.fen();
                     game.load(data.fen);
@@ -517,22 +524,12 @@
             }
         }
 
-        function copyJoinLink() {
-            if (!roomCode) { alert("No active online game."); return; }
-            const url = window.location.href.split('?')[0] + '?join=' + roomCode;
-            navigator.clipboard.writeText(url).then(() => {
-                alert('Join link copied to clipboard!');
-            }, () => {
-                alert('Failed to copy link. Please copy it manually.');
-            });
-        }
-
         // --- EVENT HANDLERS ---
         $(document).one('click', unlockAudio);
         $('.btn, .btn-icon').on('click', function() { gsap.fromTo(this, {scale: 0.95}, {scale: 1, duration: 0.3, ease: 'elastic.out(1, 0.5)'}); });
         $('.tab-btn').on('click', function() { const tabId = $(this).data('tab'); $('.tab-btn').removeClass('active'); $(this).addClass('active'); $('.tab-panel').removeClass('active'); $('#' + tabId + '-panel').addClass('active'); });
         
-        $('#pass-and-play-btn').on('click', () => { hideModal('#game-mode-modal', () => startGame('pass')); });
+        $('#pass-and-play-btn').on('click', () => { cleanupAndResetState(); hideModal('#game-mode-modal', () => startGame('pass')); });
         
         $('#online-multiplayer-btn').on('click', () => { 
             if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("YOUR_API_KEY")) { alert("Firebase is not configured. Please add your config details to the script."); return; } 
@@ -547,32 +544,52 @@
         $('#play-again-btn').on('click', () => { hideModal('#game-over-modal', () => { $('#game-area').addClass('hidden'); showModal('#game-mode-modal'); cleanupAndResetState(); }); });
         
         $('#flip-board-btn').on('click', () => board.flip());
-        $('#share-game-btn').on('click', copyJoinLink);
-        $('#new-game-btn').on('click', () => { if(confirm('Go to main menu? This will end the current match.')){ handleDisconnection("New game started."); }});
+        $('#new-game-btn').on('click', () => { if(confirm('Go to main menu? This will end the current match.')){ handleDisconnection("New game started."); $('#game-area').addClass('hidden'); showModal('#game-mode-modal'); cleanupAndResetState(); }});
         $('#resign-btn').on('click', () => { if(game.game_over()) return; if(confirm('Resign the game?')){ const resignMessage = `${playerColor === 'w' ? 'Black' : 'White'} wins by resignation.`; if(gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: resignMessage, fen: game.fen() }); } else { handleLocalGameOver(resignMessage);}}});
         $('#draw-btn').on('click', () => { alert('Draw functionality is not implemented in this version.'); });
         
         $('#chat-input').on('keypress', e => { if (e.which === 13) sendChatMessage(); });
         $('#send-chat-btn').on('click', sendChatMessage);
         
-        $undoBtn.on('click', function() { if ($(this).prop('disabled')) return; const undoneMove = game.undo(); if (undoneMove) redoStack.push(undoneMove); updateGameUi(false, null); playSound('move'); });
-        $redoBtn.on('click', function() { if ($(this).prop('disabled')) return; const move = redoStack.pop(); if (move) game.move(move); updateGameUi(false, null); playSound('move'); });
+        $undoBtn.on('click', function() {
+            if ($(this).prop('disabled') || !roomRef) return;
+            const action = $(this).data('action');
+
+            if (action === 'accept') {
+                const lastMove = game.undo();
+                if (lastMove) {
+                    roomRef.update({ fen: game.fen(), undoRequest: null });
+                }
+            } else { // 'request'
+                roomRef.update({ undoRequest: playerColor });
+                $(this).prop('disabled', true).attr('title', 'Undo request sent');
+            }
+        });
+
+        $('#share-game-btn').on('click', function() {
+            if (!roomCode) return;
+            const joinLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Join my Sintha Chess Game!',
+                    text: 'Click the link to play a game of chess with me.',
+                    url: joinLink,
+                }).catch(() => { // Fallback if share fails or is cancelled
+                    navigator.clipboard.writeText(joinLink).then(() => alert('Game link copied to clipboard!'));
+                });
+            } else {
+                navigator.clipboard.writeText(joinLink).then(() => alert('Game link copied to clipboard!'));
+            }
+        });
 
         $rematchBtn.on('click', function() {
-            if (gameMode !== 'online') {
-                resetForRematch();
-                return;
-            }
+            if (gameMode !== 'online') { resetForRematch(); return; }
             if (!roomRef) return;
             
             roomRef.once('value').then(snapshot => {
                 const data = snapshot.val();
                 if (data.rematchOffer && data.rematchOffer !== playerColor) {
-                    roomRef.update({
-                        fen: new Chess().fen(),
-                        status: 'active',
-                        rematchOffer: null,
-                    });
+                    roomRef.update({ fen: new Chess().fen(), status: 'active', rematchOffer: null, undoRequest: null });
                 } else {
                     roomRef.update({ rematchOffer: playerColor });
                     $(this).text('Offer Sent').prop('disabled', true);
@@ -584,13 +601,19 @@
 
         function init() {
             const urlParams = new URLSearchParams(window.location.search);
-            const joinCode = urlParams.get('join');
+            const roomToJoin = urlParams.get('room');
 
-            if (joinCode) {
-                 if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("YOUR_API_KEY")) { alert("Firebase is not configured."); return; }
-                 showModal('#join-room-modal');
-                 $('#room-code-input').val(joinCode);
-                 handleJoinRoom(joinCode);
+            if (roomToJoin && (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("YOUR_API_KEY"))) {
+                 alert("Firebase is not configured. Please add your config details to the script to join a game.");
+                 showModal('#game-mode-modal');
+                 return;
+            }
+
+            if (roomToJoin) {
+                hideModal('#game-mode-modal');
+                showModal('#join-room-modal');
+                $('#room-code-input').val(roomToJoin.toUpperCase());
+                handleJoinRoom(roomToJoin);
             } else {
                 showModal('#game-mode-modal');
             }
