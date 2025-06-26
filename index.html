@@ -105,15 +105,18 @@
                         <button id="copy-code-btn" class="btn-action"><i class="fas fa-copy"></i> Copy Code</button>
                         <button id="copy-link-btn" class="btn-action"><i class="fas fa-link"></i> Copy Link</button>
                     </div>
-                    <div id="gameplay-controls">
-                        <button id="undo-btn" class="btn-icon" title="Undo Move"><i class="fas fa-undo"></i></button>
+                    <div id="gameplay-controls" class="hidden">
+                        <button id="undo-btn" class="btn-action" title="Request Takeback"><i class="fas fa-undo"></i> Undo</button>
                         <button id="redo-btn" class="btn-icon" title="Redo Move"><i class="fas fa-redo"></i></button>
-                        <button id="flip-board-btn" class="btn-icon" title="Flip Board"><i class="fas fa-sync-alt"></i></button>
-                        <button id="new-game-btn" class="btn-icon" title="New Game (Disconnects)"><i class="fas fa-plus-square"></i></button>
                         <button id="draw-btn" class="btn-icon" title="Offer Draw"><i class="fas fa-handshake"></i></button>
                         <button id="resign-btn" class="btn-icon" title="Resign"><i class="fas fa-flag"></i></button>
                     </div>
-                    <button id="rematch-btn" class="btn-action hidden">Rematch</button>
+                    <div id="post-game-controls" class="hidden">
+                        <button id="rematch-btn" class="btn-action">Rematch</button>
+                    </div>
+                    <!-- Flip board is separate to be controlled independently -->
+                    <button id="flip-board-btn" class="btn-icon" title="Flip Board"><i class="fas fa-sync-alt"></i></button>
+                    <button id="new-game-btn" class="btn-icon" title="Main Menu (Disconnects)"><i class="fas fa-home"></i></button>
                 </div>
             </div>
             <div class="side-dashboard">
@@ -180,11 +183,11 @@
         let isAudioUnlocked = false;
         let redoStack = []; 
         let roomRef = null, roomCode = null;
+        let roomData = null; // Local cache of room data
         let gameListener = null, chatListener = null;
         let isWaitingForOpponent = false;
 
         const $status = $('#status'), $moveHistory = $('#move-history'), $boardEl = $('#board');
-        const $undoBtn = $('#undo-btn'), $redoBtn = $('#redo-btn');
         const $rematchBtn = $('#rematch-btn');
         const sounds = { move: $('#sound-move')[0], capture: $('#sound-capture')[0], check: $('#sound-check')[0], gameStart: $('#sound-game-start')[0], gameEnd: $('#sound-game-end')[0] };
 
@@ -213,14 +216,15 @@
             const pieceOnSquare = game.get(square);
 
             if (fromSquare !== null) {
+                const currentFen = game.fen();
                 const move = { from: fromSquare, to: square, promotion: 'q' };
                 const moveResult = game.move(move);
 
-                if (moveResult) { // Valid move
+                if (moveResult) {
                     fromSquare = null;
                     removeHighlights();
                     if (gameMode === 'online' && roomRef) {
-                        roomRef.update({ fen: game.fen() });
+                        roomRef.update({ fen: game.fen(), lastFen: currentFen, undoRequest: null });
                     }
                     updateGameUi(false, moveResult);
                     return;
@@ -240,7 +244,7 @@
         function startTimers() { stopTimers(); if (game.turn() === 'w') { whiteTimer = setInterval(updateWhiteTimer, 1000); } else { blackTimer = setInterval(updateBlackTimer, 1000); }}
         function updateWhiteTimer() { whiteTime--; $('#white-timer').text(formatTime(whiteTime)); if (whiteTime <= 0) handleTimeOut('w'); }
         function updateBlackTimer() { blackTime--; $('#black-timer').text(formatTime(blackTime)); if (blackTime <= 0) handleTimeOut('b'); }
-        function handleTimeOut(color) { const message = (color === 'w' ? 'Black' : 'White') + ' wins on time.'; if (gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: message, fen: game.fen() }); } else { handleLocalGameOver(message); } }
+        function handleTimeOut(color) { if(game.game_over()) return; const message = (color === 'w' ? 'Black' : 'White') + ' wins on time.'; if (gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: message, fen: game.fen() }); } else { handleLocalGameOver(message); } }
         function formatTime(seconds) { if (seconds < 0) seconds = 0; const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`; }
         
         // --- UI UPDATE & GAME STATE ---
@@ -254,7 +258,7 @@
             board.position(game.fen());
             updateStatusText();
             updateMoveHistory();
-            updateUndoRedoButtons();
+            updateControlsState();
             
             if (moveResult && !moveResult.rematch) playSound(moveResult.flags.includes('c') ? 'capture' : 'move');
             if (game.in_check()) playSound('check');
@@ -280,7 +284,7 @@
                          roomRef.update({ status: 'finished', result: message, fen: game.fen() });
                     }
                 }
-            } else {
+            } else if (!isWaitingForOpponent) {
                 startTimers();
             }
         }
@@ -290,7 +294,7 @@
             removeHighlights();
             $('#overlay-text').text(message);
             $('#board-overlay').fadeIn(300);
-            showRematchControls();
+            updateControlsState();
         }
 
         function handleDisconnection(message) {
@@ -301,15 +305,6 @@
             cleanupFirebaseListeners();
         }
 
-        function showRematchControls() {
-            $('#gameplay-controls').addClass('hidden');
-            $('#waiting-controls').addClass('hidden');
-            $rematchBtn.removeClass('hidden');
-            if (gameMode !== 'online') {
-                $rematchBtn.text('Play Again');
-            }
-        }
-
         function resetForRematch() {
             game.reset();
             redoStack = [];
@@ -317,8 +312,7 @@
             blackTime = MOVE_TIME;
             
             $('#board-overlay').fadeOut(200);
-            $rematchBtn.addClass('hidden').prop('disabled', false).text('Rematch');
-            $('#gameplay-controls').removeClass('hidden');
+            updateControlsState();
             
             updateGameUi(true, {rematch: true});
             playSound('gameStart');
@@ -326,7 +320,7 @@
 
         function updateStatusText() {
             if (isWaitingForOpponent) {
-                $('#status').text('Waiting for opponent...');
+                $('#status').text(`Waiting for opponent... Room: ${roomCode}`);
                 $('#opponent-bar .player-info span').text('Waiting...');
                 return;
             }
@@ -344,6 +338,34 @@
             } else { $status.css({'background-color': 'var(--panel-secondary-bg-color)', 'color': 'var(--text-color)'}); }
             $status.text(statusText);
         }
+        
+        function updateControlsState() {
+            $('#waiting-controls').toggleClass('hidden', !isWaitingForOpponent);
+            $('#gameplay-controls').toggleClass('hidden', isWaitingForOpponent || game.game_over());
+            $('#post-game-controls').toggleClass('hidden', !game.game_over());
+            
+            // Flip board is active when not in an active game
+            $('#flip-board-btn').prop('disabled', !isWaitingForOpponent && !game.game_over());
+
+            if(gameMode === 'online') {
+                $('#redo-btn').prop('disabled', true);
+                const $undoBtn = $('#undo-btn');
+                const opponentColor = playerColor === 'w' ? 'b' : 'w';
+
+                if (roomData && roomData.undoRequest) {
+                    if (roomData.undoRequest === playerColor) {
+                        $undoBtn.html('<i class="fas fa-clock"></i> Requested').prop('disabled', true);
+                    } else if (roomData.undoRequest === opponentColor) {
+                        $undoBtn.html('<i class="fas fa-check"></i> Accept Undo').prop('disabled', false);
+                    }
+                } else {
+                    $undoBtn.html('<i class="fas fa-undo"></i> Undo').prop('disabled', !roomData || !roomData.lastFen);
+                }
+            } else { // Local game
+                $('#undo-btn').html('<i class="fas fa-undo"></i> Undo').prop('disabled', game.history().length === 0);
+                $('#redo-btn').prop('disabled', redoStack.length === 0);
+            }
+        }
 
         function updateMoveHistory() { const history = game.history({ verbose: true }); let html = ''; for (let i = 0; i < history.length; i += 2) { html += `<span>${(i/2)+1}. ${history[i].san} ${history[i+1] ? history[i+1].san : ' '}</span><br>`; } $moveHistory.html(html); $moveHistory.scrollTop($moveHistory[0].scrollHeight);}
         
@@ -352,7 +374,7 @@
             game.reset(); 
             whiteTime = MOVE_TIME; blackTime = MOVE_TIME;
             fromSquare = null; redoStack = []; 
-            roomCode = null; gameMode = null; isWaitingForOpponent = false;
+            roomCode = null; gameMode = null; isWaitingForOpponent = false; roomData = null;
             $('#white-timer').text(formatTime(whiteTime)); $('#black-timer').text(formatTime(blackTime));
             $moveHistory.html(''); $('#chat-log').html(''); 
             removeHighlights(); 
@@ -373,11 +395,6 @@
             board = Chessboard('board', boardConfig);
             $boardEl.on('click', '.square-55d63', onSquareClick);
             
-            if (isWaitingForOpponent) {
-                $('#gameplay-controls').addClass('hidden');
-                $('#waiting-controls').removeClass('hidden');
-            }
-
             updateGameUi(false, null);
             $('#game-area').removeClass('hidden'); 
             playIntroAnimation(); 
@@ -396,12 +413,6 @@
             $(window).trigger('resize');
         }
         
-        function updateUndoRedoButtons() {
-            const isOnline = gameMode === 'online';
-            $undoBtn.prop('disabled', isOnline || game.history().length === 0);
-            $redoBtn.prop('disabled', isOnline || redoStack.length === 0);
-        }
-        
         // --- FIREBASE ONLINE LOGIC ---
         function cleanupFirebaseListeners() {
             if (roomRef) {
@@ -409,7 +420,7 @@
                 if (chatListener) roomRef.child('chat').off('child_added', chatListener);
                 roomRef.onDisconnect().cancel();
             }
-            roomRef = null; gameListener = null; chatListener = null;
+            roomRef = null; gameListener = null; chatListener = null; roomData = null;
         }
 
         function handleCreateRoom() {
@@ -418,7 +429,7 @@
             roomRef = database.ref('rooms/' + roomCode);
             playerColor = 'w';
             
-            const initialRoomState = { status: 'waiting', fen: new Chess().fen(), rematchOffer: null, createdAt: firebase.database.ServerValue.TIMESTAMP };
+            const initialRoomState = { status: 'waiting', fen: new Chess().fen(), lastFen: null, rematchOffer: null, undoRequest: null, createdAt: firebase.database.ServerValue.TIMESTAMP };
             
             roomRef.set(initialRoomState).then(() => {
                 hideModal('#online-modal');
@@ -440,8 +451,7 @@
                 const data = snapshot.val();
                 if (data && data.status === 'waiting') {
                     roomRef.update({ status: 'active' }).then(() => {
-                        hideModal('#join-room-modal');
-                        hideModal('#online-modal');
+                        $('.modal').each(function() { hideModal('#' + this.id); });
                         roomRef.onDisconnect().update({ status: 'disconnected', result: 'Opponent disconnected.' });
                         startGame('online', { color: 'b', fen: data.fen });
                     });
@@ -455,40 +465,37 @@
         function listenToRoomChanges() {
             if (!roomRef) return; 
             gameListener = roomRef.on('value', snapshot => {
-                const data = snapshot.val();
-                if (!data || gameMode !== 'online') return;
+                roomData = snapshot.val(); // Cache the latest room data
+                if (!roomData || gameMode !== 'online') return;
                 
-                if (isWaitingForOpponent && data.status === 'active') {
+                if (isWaitingForOpponent && roomData.status === 'active') {
                     isWaitingForOpponent = false;
-                    $('#waiting-controls').addClass('hidden');
-                    $('#gameplay-controls').removeClass('hidden');
-                    updateStatusText();
                     playSound('gameStart');
+                    startTimers();
                 }
 
                 const startingFen = new Chess().fen();
-                if (game.game_over() && data.fen === startingFen && data.status === 'active') {
+                if (game.game_over() && roomData.fen === startingFen && roomData.status === 'active') {
                     resetForRematch();
-                } else if (data.rematchOffer && data.rematchOffer !== playerColor) {
-                    $rematchBtn.text('Accept Rematch').prop('disabled', false);
                 }
 
-                if (data.status === 'finished' && !game.game_over()) {
-                     game.load(data.fen);
+                if (roomData.status === 'finished' && !game.game_over()) {
+                     game.load(roomData.fen);
                      updateGameUi(true, null);
-                } else if (data.status === 'disconnected') {
-                     handleDisconnection(data.result || "Opponent disconnected.");
+                } else if (roomData.status === 'disconnected') {
+                     handleDisconnection(roomData.result || "Opponent disconnected.");
                 }
 
-                if (data.status === 'active' && !game.game_over() && game.fen() !== data.fen) {
+                if (roomData.status === 'active' && game.fen() !== roomData.fen) {
                     const oldFen = game.fen();
-                    game.load(data.fen);
+                    game.load(roomData.fen);
                     const history = game.history({ verbose: true });
                     const moveResult = history.length > 0 ? history[history.length - 1] : null;
                     if (game.fen() !== oldFen) {
                         updateGameUi(true, moveResult); 
                     }
                 }
+                updateControlsState();
             });
 
             chatListener = roomRef.child('chat').on('child_added', snapshot => {
@@ -501,18 +508,6 @@
             });
         }
         
-        function sendChatMessage() {
-            const $chatInput = $('#chat-input');
-            const message = $chatInput.val().trim();
-            if (message !== '' && gameMode === 'online' && roomRef) {
-                const chatMsg = { sender: playerColor, message: message, timestamp: firebase.database.ServerValue.TIMESTAMP };
-                roomRef.child('chat').push(chatMsg);
-                $('#chat-log').append(`<div class="my-message"><b>You</b> ${message}</div>`);
-                $('#chat-log').scrollTop($('#chat-log')[0].scrollHeight);
-                $chatInput.val('').focus();
-            }
-        }
-
         // --- EVENT HANDLERS ---
         $(document).one('click', unlockAudio);
         $('.btn, .btn-icon, .btn-action').on('click', function() { gsap.fromTo(this, {scale: 0.95}, {scale: 1, duration: 0.3, ease: 'elastic.out(1, 0.5)'}); });
@@ -535,20 +530,36 @@
         $('#resign-btn').on('click', () => { if(game.game_over() || isWaitingForOpponent) return; if(confirm('Resign the game?')){ const resignMessage = `${playerColor === 'w' ? 'Black' : 'White'} wins by resignation.`; if(gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: resignMessage, fen: game.fen() }); } else { handleLocalGameOver(resignMessage);}}});
         $('#draw-btn').on('click', () => { alert('Draw functionality is not implemented in this version.'); });
         
-        $('#chat-input').on('keypress', e => { if (e.which === 13) sendChatMessage(); });
-        $('#send-chat-btn').on('click', sendChatMessage);
+        $('#undo-btn').on('click', function() {
+            if (gameMode !== 'online') {
+                const undoneMove = game.undo(); if(undoneMove) redoStack.push(undoneMove);
+            } else {
+                if (!roomRef || !roomData) return;
+                const opponentColor = playerColor === 'w' ? 'b' : 'w';
+                if (roomData.undoRequest === opponentColor) { // Accept undo
+                    roomRef.update({ fen: roomData.lastFen, lastFen: null, undoRequest: null });
+                } else if (!roomData.undoRequest) { // Request undo
+                    roomRef.update({ undoRequest: playerColor });
+                }
+            }
+            updateControlsState();
+        });
         
-        $undoBtn.on('click', function() { if ($(this).prop('disabled')) return; const undoneMove = game.undo(); if (undoneMove) redoStack.push(undoneMove); updateGameUi(false, null); playSound('move'); });
-        $redoBtn.on('click', function() { if ($(this).prop('disabled')) return; const move = redoStack.pop(); if (move) game.move(move); updateGameUi(false, null); playSound('move'); });
+        $('#redo-btn').on('click', function() {
+            if (gameMode !== 'online') {
+                const move = redoStack.pop(); if (move) game.move(move);
+                updateGameUi(false, null); playSound('move');
+            }
+        });
 
-        $rematchBtn.on('click', function() {
+        $('#rematch-btn').on('click', function() {
             if (gameMode !== 'online') { resetForRematch(); return; }
             if (!roomRef) return;
             
             roomRef.once('value').then(snapshot => {
                 const data = snapshot.val();
                 if (data.rematchOffer && data.rematchOffer !== playerColor) {
-                    roomRef.update({ fen: new Chess().fen(), status: 'active', rematchOffer: null });
+                    roomRef.update({ fen: new Chess().fen(), status: 'active', rematchOffer: null, lastFen: null, undoRequest: null });
                 } else {
                     roomRef.update({ rematchOffer: playerColor });
                     $(this).text('Offer Sent').prop('disabled', true);
@@ -560,6 +571,8 @@
             const urlParams = new URLSearchParams(window.location.search);
             const roomCodeFromUrl = urlParams.get('room');
             if (roomCodeFromUrl) {
+                const newUrl = `${window.location.origin}${window.location.pathname}`;
+                window.history.replaceState({}, document.title, newUrl);
                 handleJoinRoom(roomCodeFromUrl);
             } else {
                 showModal('#game-mode-modal');
