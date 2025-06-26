@@ -26,6 +26,7 @@
             --button-hover-bg: #4a4a4a;
             --accent-color: #007BFF;
             --success-color: #28a745;
+            --danger-color: #D32F2F;
             --glow-color: var(--accent-color);
         }
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -70,6 +71,7 @@
         #chat-log div b { display: block; font-size: 0.8rem; margin-bottom: 3px; font-weight: 700; opacity: 0.8; }
         #chat-log .my-message { background: linear-gradient(45deg, var(--accent-color), #0056b3); align-self: flex-end; border-bottom-right-radius: 4px; }
         #chat-log .opponent-message { background: linear-gradient(45deg, #454950, #2c2f33); align-self: flex-start; border-bottom-left-radius: 4px; }
+        #chat-log .system-message { background: none; box-shadow: none; font-style: italic; color: var(--text-secondary-color); font-size: 0.9rem; text-align: center; align-self: center; width: 100%; max-width: 100%; padding: 0.2rem 0; }
         .chat-input-area { display: flex; align-items: center; gap: 0.5rem; }
         #chat-input { flex-grow: 1; width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--bg-color); color: var(--text-color); font-family: var(--font-family); transition: border-color 0.2s; }
         #chat-input:focus { border-color: var(--accent-color); outline: none; }
@@ -88,6 +90,23 @@
         #room-code-display { font-size: 2rem; font-weight: bold; background: var(--bg-color); padding: 1rem; border-radius: 6px; margin: 1.5rem 0; letter-spacing: 4px; user-select: all; border: 1px dashed var(--border-color); }
         #room-code-input { width: 100%; padding: 0.75rem; font-size: 1.5rem; text-align: center; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 1rem; letter-spacing: 4px; font-weight: bold; text-transform: uppercase; background-color: var(--bg-color); color: var(--text-color); }
         .hidden { display: none !important; }
+
+        #toast-notification {
+            display: none;
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--danger-color);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            z-index: 2000;
+            font-size: 1.2rem;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
         @media (max-width: 1100px) { .game-layout { flex-direction: column; } .side-dashboard { width: 100%; } .board-area { max-width: 100%; } }
         @media (max-width: 640px) { body { padding: 0.5rem; } .header { padding: 0.5rem 1rem; } .header h1 { font-size: 1.2rem; } .btn { padding: 0.75rem 1.2rem; font-size: 0.9rem; } .modal-content { padding: 1.5rem; } }
     </style>
@@ -135,6 +154,8 @@
     <div id="create-room-modal" class="modal"><div class="modal-content"><h2>Your Game is Ready!</h2><p>Share this code or link with your friend. The game will start when they join.</p><div id="room-code-display"></div><button id="copy-code-btn" class="btn"><i class="fas fa-link"></i> Copy Join Link</button></div></div>
     <div id="join-room-modal" class="modal"><div class="modal-content"><h2>Join Game</h2><input type="text" id="room-code-input" placeholder="Enter Code" maxlength="6"><button id="join-room-submit-btn" class="btn btn-primary">Join</button></div></div>
     <div id="game-over-modal" class="modal"><div class="modal-content"><h2 id="game-over-message"></h2><button id="play-again-btn" class="btn btn-primary" style="margin-top: 1.5rem;">Main Menu</button></div></div>
+
+    <div id="toast-notification"></div>
 
     <audio id="sound-move" src="https://lichess1.org/sound/standard/move.mp3" preload="auto"></audio>
     <audio id="sound-capture" src="https://lichess1.org/sound/standard/capture.mp3" preload="auto"></audio>
@@ -191,7 +212,13 @@
         function showModal(id) { const modal = $(id); modal.css('display', 'flex'); gsap.to(modal.find('.modal-content'), { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.7)' });}
         function hideModal(id, onComplete) { const modal = $(id); gsap.to(modal.find('.modal-content'), { opacity: 0, scale: 0.8, duration: 0.2, ease: 'power2.in', onComplete: () => { modal.hide(); if (onComplete) onComplete(); }});}
         function playIntroAnimation() { const tl = gsap.timeline(); tl.from('.header', { y: -50, opacity: 0, duration: 0.5, ease: 'power2.out' }).from('.player-bar', { y: (i) => i === 0 ? -30 : 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out' }, "-=0.3").from('#board-container', { scale: 0.9, opacity: 0, duration: 0.5, ease: 'back.out(1.4)'}, "-=0.6").from('.controls-area', { y: 30, opacity: 0, duration: 0.4, ease: 'power2.out' }, "-=0.5").from('.side-dashboard', { x: 100, opacity: 0, duration: 0.6, ease: 'power2.out' }, "-=0.5"); }
-        
+        function showToast(message, duration = 3000) {
+            const toast = $('#toast-notification');
+            toast.text(message).show();
+            gsap.fromTo(toast, { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3, ease: 'power2.out' });
+            gsap.to(toast, { y: -50, opacity: 0, duration: 0.3, ease: 'power2.in', delay: duration / 1000, onComplete: () => toast.hide() });
+        }
+
         // --- MOVE HIGHLIGHTING ---
         function removeHighlights() { $boardEl.find('.square-55d63').removeClass('highlight-source'); $boardEl.find('.move-dot').remove(); }
         function highlightMoves(square) {
@@ -245,7 +272,6 @@
         
         // --- UNIFIED UI UPDATE FUNCTION ---
         function updateGameUi(isRemote, moveResult) {
-            // Only start timers if the game has actually started (opponent has joined for online games)
             const gameHasStarted = gameMode === 'pass' || (gameMode === 'online' && (game.history().length > 0 || playerColor === 'b'));
             
             if (moveResult && !moveResult.rematch && gameHasStarted) {
@@ -260,7 +286,11 @@
             updateUndoButtonState();
             
             if (moveResult && !moveResult.rematch) playSound(moveResult.flags.includes('c') ? 'capture' : 'move');
-            if (game.in_check()) playSound('check');
+            
+            if (game.in_check()) {
+                playSound('check');
+                showToast('Check!', 2500);
+            }
             
             if (game.game_over()) {
                 stopTimers();
@@ -326,7 +356,6 @@
 
         function updateStatusText() {
             let statusText = (game.turn() === 'w' ? 'White' : 'Black') + ' to move.';
-             // For host, show waiting message until opponent joins
             if (gameMode === 'online' && playerColor === 'w' && game.history().length === 0) {
                  statusText = "Waiting for opponent to join...";
             }
@@ -338,7 +367,7 @@
                 if (game.turn() === playerColor) $('#player-bar').addClass('active-player'); else $('#opponent-bar').addClass('active-player');
             }
             if (game.in_check()) { 
-                statusText += ' - CHECK!'; $status.css({'background-color': 'rgba(255,100,100,0.2)', 'color': '#FFCFCF'}); gsap.fromTo($status, {scale: 1.05}, {scale: 1, duration: 0.8, ease: 'elastic.out(1, 0.5)'}); 
+                statusText += ' - CHECK!'; $status.css({'background-color': 'rgba(211, 47, 47, 0.3)', 'color': '#FFCDD2'}); 
             } else { $status.css({'background-color': 'var(--panel-secondary-bg-color)', 'color': 'var(--text-color)'}); }
             $status.text(statusText);
         }
@@ -374,7 +403,7 @@
             $boardEl.on('click', '.square-55d63', onSquareClick);
             
             $('#game-area').removeClass('hidden');
-            if (!options.isHostWaiting) { // Don't animate if host is just setting up the board
+            if (!options.isHostWaiting) {
                 playIntroAnimation(); 
             }
             if (!options.isHostWaiting) {
@@ -383,7 +412,6 @@
             
             updateGameUi(false, null);
 
-            // Per request, hide flip button after game starts and manage share button
             $('#flip-board-btn').hide();
             if (mode === 'online') { 
                 $('#share-game-btn').removeClass('hidden');
@@ -404,7 +432,6 @@
                 $undoBtn.prop('disabled', true).removeClass('accept-undo').html('<i class="fas fa-undo"></i>').attr('title', 'Undo unavailable');
                 return;
             }
-            // Logic for enabling/disabling is handled within the Firebase listener (listenToRoomChanges)
         }
         
         // --- FIREBASE ONLINE LOGIC ---
@@ -423,7 +450,6 @@
             roomRef = database.ref('rooms/' + roomCode);
             playerColor = 'w';
 
-            // Show board and modal immediately for the host
             startGame('online', { color: 'w', isHostWaiting: true });
             
             const joinLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
@@ -444,15 +470,14 @@
             roomRef.set(initialRoomState).then(() => {
                 roomRef.onDisconnect().remove();
                 
-                // This listener just waits for the opponent to join
                 const joinListener = roomRef.on('value', snapshot => {
                     const data = snapshot.val();
                     if (data && data.status === 'active') {
-                        roomRef.off('value', joinListener); // Stop this specific listener
-                        playSound('gameStart'); // Play start sound when opponent joins
+                        roomRef.off('value', joinListener);
+                        playSound('gameStart');
                         hideModal('#create-room-modal');
-                        startTimers(); // Start the timer for the host
-                        updateStatusText(); // Update status from "Waiting..." to "White to move."
+                        startTimers();
+                        updateStatusText();
                     }
                 });
             }).catch(err => { alert("Error creating room: " + err.message); });
@@ -488,7 +513,6 @@
                 const data = snapshot.val();
                 if (!data || gameMode !== 'online') return;
                 
-                // --- Handle Undo Request Logic ---
                 if (data.undoRequest && data.undoRequest !== playerColor && !game.game_over()) {
                     $undoBtn.prop('disabled', false).addClass('accept-undo').attr('title', 'Accept Undo Request').data('action', 'accept').html('<i class="fas fa-check"></i>');
                 } else {
@@ -498,7 +522,6 @@
                     if(data.undoRequest === playerColor) $undoBtn.prop('disabled', true).attr('title', 'Undo request sent');
                 }
 
-                // --- Handle Rematch Logic ---
                 const startingFen = new Chess().fen();
                 if (game.game_over() && data.fen === startingFen && data.status === 'active') {
                     resetForRematch();
@@ -506,7 +529,6 @@
                     $rematchBtn.text('Accept Rematch').prop('disabled', false);
                 }
 
-                // --- Handle Game Over states ---
                 if (data.status === 'finished' && !game.game_over()) {
                      game.load(data.fen);
                      updateGameUi(true, null);
@@ -514,7 +536,6 @@
                      handleDisconnection(data.result || "Opponent disconnected.");
                 }
 
-                // --- Handle normal moves / accepted undos ---
                 if (data.status === 'active' && !game.game_over() && game.fen() !== data.fen) {
                     const oldFen = game.fen();
                     game.load(data.fen);
@@ -529,22 +550,27 @@
             chatListener = roomRef.child('chat').on('child_added', snapshot => {
                 if (gameMode !== 'online' || !snapshot.exists()) return;
                 const chat = snapshot.val();
-                if (chat.sender === playerColor) return;
-                const senderName = 'Opponent';
-                $('#chat-log').append(`<div class="opponent-message"><b>${senderName}</b> ${chat.message}</div>`);
+                let chatHtml;
+                if(chat.sender === 'system') {
+                    chatHtml = `<div class="system-message">${chat.message}</div>`;
+                } else {
+                    const isMyMessage = chat.sender === playerColor;
+                    const senderName = isMyMessage ? 'You' : 'Opponent';
+                    const messageClass = isMyMessage ? 'my-message' : 'opponent-message';
+                    chatHtml = `<div class="${messageClass}"><b>${senderName}</b> ${chat.message}</div>`;
+                }
+                $('#chat-log').append(chatHtml);
                 $('#chat-log').scrollTop($('#chat-log')[0].scrollHeight);
             });
         }
         
-        function sendChatMessage() {
-            const $chatInput = $('#chat-input');
-            const message = $chatInput.val().trim();
-            if (message !== '' && gameMode === 'online' && roomRef) {
-                const chatMsg = { sender: playerColor, message: message, timestamp: firebase.database.ServerValue.TIMESTAMP };
+        function sendChatMessage(message, sender = playerColor) {
+            if (message.trim() !== '' && gameMode === 'online' && roomRef) {
+                const chatMsg = { sender: sender, message: message, timestamp: firebase.database.ServerValue.TIMESTAMP };
                 roomRef.child('chat').push(chatMsg);
-                $('#chat-log').append(`<div class="my-message"><b>You</b> ${message}</div>`);
-                $('#chat-log').scrollTop($('#chat-log')[0].scrollHeight);
-                $chatInput.val('').focus();
+                if (sender === playerColor) {
+                    $('#chat-input').val('').focus();
+                }
             }
         }
 
@@ -572,21 +598,23 @@
         $('#resign-btn').on('click', () => { if(game.game_over()) return; if(confirm('Resign the game?')){ const resignMessage = `${playerColor === 'w' ? 'Black' : 'White'} wins by resignation.`; if(gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: resignMessage, fen: game.fen() }); } else { handleLocalGameOver(resignMessage);}}});
         $('#draw-btn').on('click', () => { alert('Draw functionality is not implemented in this version.'); });
         
-        $('#chat-input').on('keypress', e => { if (e.which === 13) sendChatMessage(); });
-        $('#send-chat-btn').on('click', sendChatMessage);
+        $('#chat-input').on('keypress', e => { if (e.which === 13) sendChatMessage($('#chat-input').val()); });
+        $('#send-chat-btn').on('click', () => sendChatMessage($('#chat-input').val()));
         
         $undoBtn.on('click', function() {
             if ($(this).prop('disabled') || !roomRef) return;
             const action = $(this).data('action');
+            const playerName = playerColor === 'w' ? 'White' : 'Black';
 
             if (action === 'accept') {
                 const lastMove = game.undo();
                 if (lastMove) {
+                    sendChatMessage(`<b>${playerName}</b> accepted the takeback request.`, 'system');
                     roomRef.update({ fen: game.fen(), undoRequest: null });
                 }
             } else { // 'request'
+                sendChatMessage(`<b>${playerName}</b> has requested a takeback.`, 'system');
                 roomRef.update({ undoRequest: playerColor });
-                $(this).prop('disabled', true).attr('title', 'Undo request sent');
             }
         });
 
@@ -598,11 +626,11 @@
                     title: 'Join my Sintha Chess Game!',
                     text: 'Click the link to play a game of chess with me.',
                     url: joinLink,
-                }).catch(() => { // Fallback if share fails or is cancelled
-                    navigator.clipboard.writeText(joinLink).then(() => alert('Game link copied to clipboard!'));
+                }).catch(() => {
+                    navigator.clipboard.writeText(joinLink).then(() => showToast('Game link copied!', 2000));
                 });
             } else {
-                navigator.clipboard.writeText(joinLink).then(() => alert('Game link copied to clipboard!'));
+                navigator.clipboard.writeText(joinLink).then(() => showToast('Game link copied!', 2000));
             }
         });
 
