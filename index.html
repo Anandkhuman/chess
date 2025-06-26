@@ -49,8 +49,8 @@
         .btn-action { width: auto; padding-left: 1rem; padding-right: 1rem; font-size: 1rem; font-weight: 500; color: var(--text-color); gap: 0.5rem; }
         .btn-icon { width: 44px; }
         .btn-icon:hover, .btn-action:hover { background-color: var(--button-hover-bg); transform: translateY(-2px); }
-        .btn-icon i { color: var(--text-secondary-color); transition: color 0.2s ease-out; }
-        .btn-icon:hover i { color: var(--text-color); }
+        .btn-icon i, .btn-action i { color: var(--text-secondary-color); transition: color 0.2s ease-out; }
+        .btn-icon:hover i, .btn-action:hover i { color: var(--text-color); }
         .btn-icon:disabled, .btn-action:disabled { opacity: 0.5; cursor: not-allowed; background-color: var(--button-bg) !important; transform: none; }
         .btn-icon:disabled:hover i { color: var(--text-secondary-color); }
         .side-dashboard { width: 350px; flex-shrink: 0; background-color: var(--panel-bg-color); border-radius: 12px; box-shadow: 0 4px 25px rgba(0,0,0,0.2); overflow: hidden; }
@@ -101,20 +101,20 @@
                 </div>
                 <div id="player-bar" class="player-bar"><div class="player-info"><i class="fas fa-user-circle"></i><span>You</span></div><div id="white-timer" class="timer">01:00</div></div>
                 <div class="controls-area">
-                    <div id="waiting-controls" class="hidden">
-                        <button id="copy-code-btn" class="btn-action"><i class="fas fa-copy"></i> Copy Code</button>
-                        <button id="copy-link-btn" class="btn-action"><i class="fas fa-link"></i> Copy Link</button>
-                    </div>
-                    <div id="gameplay-controls" class="hidden">
-                        <button id="undo-btn" class="btn-action" title="Request Takeback"><i class="fas fa-undo"></i> Undo</button>
-                        <button id="redo-btn" class="btn-icon" title="Redo Move"><i class="fas fa-redo"></i></button>
-                        <button id="draw-btn" class="btn-icon" title="Offer Draw"><i class="fas fa-handshake"></i></button>
-                        <button id="resign-btn" class="btn-icon" title="Resign"><i class="fas fa-flag"></i></button>
-                    </div>
-                    <div id="post-game-controls" class="hidden">
-                        <button id="rematch-btn" class="btn-action">Rematch</button>
-                    </div>
-                    <!-- Flip board is separate to be controlled independently -->
+                    <!-- Waiting Actions -->
+                    <button id="copy-code-btn" class="btn-action waiting-action hidden"><i class="fas fa-copy"></i> Copy Code</button>
+                    <button id="copy-link-btn" class="btn-action waiting-action hidden"><i class="fas fa-link"></i> Copy Link</button>
+                    
+                    <!-- Gameplay Actions -->
+                    <button id="undo-btn" class="btn-action gameplay-action hidden" title="Request Takeback"><i class="fas fa-undo"></i> Undo</button>
+                    <button id="redo-btn" class="btn-icon gameplay-action hidden" title="Redo Move"><i class="fas fa-redo"></i></button>
+                    <button id="draw-btn" class="btn-icon gameplay-action hidden" title="Offer Draw"><i class="fas fa-handshake"></i></button>
+                    <button id="resign-btn" class="btn-icon gameplay-action hidden" title="Resign"><i class="fas fa-flag"></i></button>
+                    
+                    <!-- Post-Game Actions -->
+                    <button id="rematch-btn" class="btn-action post-game-action hidden">Rematch</button>
+                    
+                    <!-- Universal Actions -->
                     <button id="flip-board-btn" class="btn-icon" title="Flip Board"><i class="fas fa-sync-alt"></i></button>
                     <button id="new-game-btn" class="btn-icon" title="Main Menu (Disconnects)"><i class="fas fa-home"></i></button>
                 </div>
@@ -187,8 +187,6 @@
         let gameListener = null, chatListener = null;
         let isWaitingForOpponent = false;
 
-        const $status = $('#status'), $moveHistory = $('#move-history'), $boardEl = $('#board');
-        const $rematchBtn = $('#rematch-btn');
         const sounds = { move: $('#sound-move')[0], capture: $('#sound-capture')[0], check: $('#sound-check')[0], gameStart: $('#sound-game-start')[0], gameEnd: $('#sound-game-end')[0] };
 
         // --- UI & SOUND HELPERS ---
@@ -199,13 +197,13 @@
         function playIntroAnimation() { const tl = gsap.timeline(); tl.from('.header', { y: -50, opacity: 0, duration: 0.5, ease: 'power2.out' }).from('.player-bar', { y: (i) => i === 0 ? -30 : 30, opacity: 0, duration: 0.6, stagger: 0.1, ease: 'power2.out' }, "-=0.3").from('#board-container', { scale: 0.9, opacity: 0, duration: 0.5, ease: 'back.out(1.4)'}, "-=0.6").from('.controls-area', { y: 30, opacity: 0, duration: 0.4, ease: 'power2.out' }, "-=0.5").from('.side-dashboard', { x: 100, opacity: 0, duration: 0.6, ease: 'power2.out' }, "-=0.5"); }
         
         // --- MOVE HIGHLIGHTING ---
-        function removeHighlights() { $boardEl.find('.square-55d63').removeClass('highlight-source'); $boardEl.find('.move-dot').remove(); }
+        function removeHighlights() { $('#board .square-55d63').removeClass('highlight-source'); $('#board .move-dot').remove(); }
         function highlightMoves(square) {
             removeHighlights();
             const moves = game.moves({ square: square, verbose: true });
             if (moves.length === 0) return;
-            $boardEl.find('.square-' + square).addClass('highlight-source');
-            moves.forEach(move => { $boardEl.find('.square-' + move.to).append('<div class="move-dot"></div>'); });
+            $('#board .square-' + square).addClass('highlight-source');
+            moves.forEach(move => { $('#board .square-' + move.to).append('<div class="move-dot"></div>'); });
         }
         
         // --- PLAYER MOVE LOGIC ---
@@ -312,8 +310,6 @@
             blackTime = MOVE_TIME;
             
             $('#board-overlay').fadeOut(200);
-            updateControlsState();
-            
             updateGameUi(true, {rematch: true});
             playSound('gameStart');
         }
@@ -334,20 +330,19 @@
                 if (game.turn() === playerColor) $('#player-bar').addClass('active-player'); else $('#opponent-bar').addClass('active-player');
             }
             if (game.in_check()) { 
-                statusText += ' - CHECK!'; $status.css({'background-color': 'rgba(255,100,100,0.2)', 'color': '#FFCFCF'}); gsap.fromTo($status, {scale: 1.05}, {scale: 1, duration: 0.8, ease: 'elastic.out(1, 0.5)'}); 
+                statusText += ' - CHECK!'; $status.css({'background-color': 'rgba(255,100,100,0.2)', 'color': '#FFCFCF'}); gsap.fromTo($('#status'), {scale: 1.05}, {scale: 1, duration: 0.8, ease: 'elastic.out(1, 0.5)'}); 
             } else { $status.css({'background-color': 'var(--panel-secondary-bg-color)', 'color': 'var(--text-color)'}); }
             $status.text(statusText);
         }
         
         function updateControlsState() {
-            $('#waiting-controls').toggleClass('hidden', !isWaitingForOpponent);
-            $('#gameplay-controls').toggleClass('hidden', isWaitingForOpponent || game.game_over());
-            $('#post-game-controls').toggleClass('hidden', !game.game_over());
+            $('.waiting-action').toggleClass('hidden', !isWaitingForOpponent);
+            $('.gameplay-action').toggleClass('hidden', isWaitingForOpponent || game.game_over());
+            $('.post-game-action').toggleClass('hidden', !game.game_over());
             
-            // Flip board is active when not in an active game
             $('#flip-board-btn').prop('disabled', !isWaitingForOpponent && !game.game_over());
 
-            if(gameMode === 'online') {
+            if (gameMode === 'online') {
                 $('#redo-btn').prop('disabled', true);
                 const $undoBtn = $('#undo-btn');
                 const opponentColor = playerColor === 'w' ? 'b' : 'w';
@@ -359,7 +354,7 @@
                         $undoBtn.html('<i class="fas fa-check"></i> Accept Undo').prop('disabled', false);
                     }
                 } else {
-                    $undoBtn.html('<i class="fas fa-undo"></i> Undo').prop('disabled', !roomData || !roomData.lastFen);
+                    $undoBtn.html('<i class="fas fa-undo"></i> Undo').prop('disabled', !roomData || !roomData.lastFen || game.history().length === 0);
                 }
             } else { // Local game
                 $('#undo-btn').html('<i class="fas fa-undo"></i> Undo').prop('disabled', game.history().length === 0);
@@ -367,7 +362,7 @@
             }
         }
 
-        function updateMoveHistory() { const history = game.history({ verbose: true }); let html = ''; for (let i = 0; i < history.length; i += 2) { html += `<span>${(i/2)+1}. ${history[i].san} ${history[i+1] ? history[i+1].san : ' '}</span><br>`; } $moveHistory.html(html); $moveHistory.scrollTop($moveHistory[0].scrollHeight);}
+        function updateMoveHistory() { const history = game.history({ verbose: true }); let html = ''; for (let i = 0; i < history.length; i += 2) { html += `<span>${(i/2)+1}. ${history[i].san} ${history[i+1] ? history[i+1].san : ' '}</span><br>`; } $('#move-history').html(html); $('#move-history').scrollTop($('#move-history')[0].scrollHeight);}
         
         function cleanupAndResetState() {
             stopTimers();
@@ -376,7 +371,7 @@
             fromSquare = null; redoStack = []; 
             roomCode = null; gameMode = null; isWaitingForOpponent = false; roomData = null;
             $('#white-timer').text(formatTime(whiteTime)); $('#black-timer').text(formatTime(blackTime));
-            $moveHistory.html(''); $('#chat-log').html(''); 
+            $('#move-history').html(''); $('#chat-log').html(''); 
             removeHighlights(); 
             cleanupFirebaseListeners();
         }
@@ -393,7 +388,7 @@
             
             if(board) board.destroy();
             board = Chessboard('board', boardConfig);
-            $boardEl.on('click', '.square-55d63', onSquareClick);
+            $('#board').on('click', '.square-55d63', onSquareClick);
             
             updateGameUi(false, null);
             $('#game-area').removeClass('hidden'); 
@@ -465,7 +460,7 @@
         function listenToRoomChanges() {
             if (!roomRef) return; 
             gameListener = roomRef.on('value', snapshot => {
-                roomData = snapshot.val(); // Cache the latest room data
+                roomData = snapshot.val();
                 if (!roomData || gameMode !== 'online') return;
                 
                 if (isWaitingForOpponent && roomData.status === 'active') {
@@ -533,16 +528,16 @@
         $('#undo-btn').on('click', function() {
             if (gameMode !== 'online') {
                 const undoneMove = game.undo(); if(undoneMove) redoStack.push(undoneMove);
+                updateGameUi(false, null);
             } else {
                 if (!roomRef || !roomData) return;
                 const opponentColor = playerColor === 'w' ? 'b' : 'w';
-                if (roomData.undoRequest === opponentColor) { // Accept undo
+                if (roomData.undoRequest === opponentColor) {
                     roomRef.update({ fen: roomData.lastFen, lastFen: null, undoRequest: null });
-                } else if (!roomData.undoRequest) { // Request undo
+                } else if (!roomData.undoRequest) {
                     roomRef.update({ undoRequest: playerColor });
                 }
             }
-            updateControlsState();
         });
         
         $('#redo-btn').on('click', function() {
