@@ -246,7 +246,7 @@
         // --- UNIFIED UI UPDATE FUNCTION ---
         function updateGameUi(isRemote, moveResult) {
             // Only start timers if the game has actually started (opponent has joined for online games)
-            const gameHasStarted = gameMode === 'pass' || (gameMode === 'online' && game.history().length > 0 || playerColor === 'b');
+            const gameHasStarted = gameMode === 'pass' || (gameMode === 'online' && (game.history().length > 0 || playerColor === 'b'));
             
             if (moveResult && !moveResult.rematch && gameHasStarted) {
                 if(game.turn() === 'w') { whiteTime = MOVE_TIME; } else { blackTime = MOVE_TIME; }
@@ -460,7 +460,7 @@
 
         function handleJoinRoom(codeToJoin) {
             const enteredCode = codeToJoin || $('#room-code-input').val().trim().toUpperCase();
-            if (enteredCode.length !== 6) { alert('Please enter a valid 6-digit room code.'); return; }
+            if (!enteredCode || enteredCode.length !== 6) { alert('Please enter a valid 6-digit room code.'); return; }
             cleanupAndResetState();
             roomCode = enteredCode;
             roomRef = database.ref('rooms/' + roomCode);
@@ -495,7 +495,7 @@
                     $undoBtn.removeClass('accept-undo').data('action', 'request').html('<i class="fas fa-undo"></i>');
                     const canRequestUndo = game.history().length > 0 && game.turn() !== playerColor && !data.undoRequest;
                     $undoBtn.prop('disabled', !canRequestUndo).attr('title', canRequestUndo ? 'Request Undo' : 'Cannot request undo now');
-                    if(data.undoRequest === playerColor) $undoBtn.attr('title', 'Undo request sent');
+                    if(data.undoRequest === playerColor) $undoBtn.prop('disabled', true).attr('title', 'Undo request sent');
                 }
 
                 // --- Handle Rematch Logic ---
@@ -637,7 +637,7 @@
                 hideModal('#game-mode-modal');
                 showModal('#join-room-modal');
                 $('#room-code-input').val(roomToJoin.toUpperCase());
-                handleJoinRoom(roomToJoin);
+                handleJoinRoom(roomToJoin.toUpperCase());
             } else {
                 showModal('#game-mode-modal');
             }
