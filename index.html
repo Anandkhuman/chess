@@ -132,7 +132,7 @@
 
     <div id="game-mode-modal" class="modal"><div class="modal-content"><h2>Welcome to Sintha Chess</h2><p>Play with 1 minute per move. Choose to play online or locally.</p><div class="btn-group"><button id="online-multiplayer-btn" class="btn btn-primary">Online Multiplayer</button><button id="pass-and-play-btn" class="btn">Pass & Play (Local)</button></div></div></div>
     <div id="online-modal" class="modal"><div class="modal-content"><h2>Online Multiplayer</h2><p>Create a private room to play with a friend, or join one with their code.</p><div class="btn-group"><button id="create-game-btn" class="btn btn-primary">Create Game</button><button id="join-game-btn" class="btn">Join Game</button></div><button id="online-back-btn" class="btn" style="margin-top: 1.5rem;">Back</button></div></div>
-    <div id="create-room-modal" class="modal"><div class="modal-content"><h2>Your Room Code</h2><p>Share this code with your friend. Waiting for them to connect...</p><div id="room-code-display"></div><button id="copy-code-btn" class="btn"><i class="fas fa-link"></i> Copy Join Link</button></div></div>
+    <div id="create-room-modal" class="modal"><div class="modal-content"><h2>Your Game is Ready!</h2><p>Share this code or link with your friend. The game will start when they join.</p><div id="room-code-display"></div><button id="copy-code-btn" class="btn"><i class="fas fa-link"></i> Copy Join Link</button></div></div>
     <div id="join-room-modal" class="modal"><div class="modal-content"><h2>Join Game</h2><input type="text" id="room-code-input" placeholder="Enter Code" maxlength="6"><button id="join-room-submit-btn" class="btn btn-primary">Join</button></div></div>
     <div id="game-over-modal" class="modal"><div class="modal-content"><h2 id="game-over-message"></h2><button id="play-again-btn" class="btn btn-primary" style="margin-top: 1.5rem;">Main Menu</button></div></div>
 
@@ -205,8 +205,11 @@
         // --- PLAYER MOVE LOGIC ---
         function onSquareClick() {
             if (game.game_over()) return; 
+            if (gameMode === 'online' && game.turn() !== playerColor) return;
+            // For host, prevent moves while waiting for opponent.
+            if (gameMode === 'online' && playerColor === 'w' && game.history().length === 0 && $('#create-room-modal').is(':visible')) return;
+
             const square = $(this).data('square');
-            if ((gameMode !== 'pass' && game.turn() !== playerColor)) return;
             const pieceOnSquare = game.get(square);
 
             if (fromSquare !== null) {
@@ -242,7 +245,10 @@
         
         // --- UNIFIED UI UPDATE FUNCTION ---
         function updateGameUi(isRemote, moveResult) {
-            if (moveResult && !moveResult.rematch) {
+            // Only start timers if the game has actually started (opponent has joined for online games)
+            const gameHasStarted = gameMode === 'pass' || (gameMode === 'online' && game.history().length > 0 || playerColor === 'b');
+            
+            if (moveResult && !moveResult.rematch && gameHasStarted) {
                 if(game.turn() === 'w') { whiteTime = MOVE_TIME; } else { blackTime = MOVE_TIME; }
             }
             $('#white-timer').text(formatTime(whiteTime));
@@ -277,7 +283,7 @@
                          roomRef.update({ status: 'finished', result: message, fen: game.fen() });
                     }
                 }
-            } else {
+            } else if (gameHasStarted) {
                 startTimers();
             }
         }
@@ -306,8 +312,7 @@
 
         function resetForRematch() {
             game.reset();
-            whiteTime = MOVE_TIME;
-            blackTime = MOVE_TIME;
+            whiteTime = MOVE_TIME; blackTime = MOVE_TIME;
             
             $('#board-overlay').fadeOut(200);
             $rematchBtn.addClass('hidden').prop('disabled', false).text('Rematch');
@@ -321,6 +326,11 @@
 
         function updateStatusText() {
             let statusText = (game.turn() === 'w' ? 'White' : 'Black') + ' to move.';
+             // For host, show waiting message until opponent joins
+            if (gameMode === 'online' && playerColor === 'w' && game.history().length === 0) {
+                 statusText = "Waiting for opponent to join...";
+            }
+
             $('.player-bar').removeClass('active-player');
             if (gameMode === 'pass') {
                 if (game.turn() === 'w') $('#player-bar').addClass('active-player'); else $('#opponent-bar').addClass('active-player');
@@ -363,11 +373,16 @@
             board = Chessboard('board', boardConfig);
             $boardEl.on('click', '.square-55d63', onSquareClick);
             
-            updateGameUi(false, null);
-            $('#game-area').removeClass('hidden'); 
-            playIntroAnimation(); 
-            playSound('gameStart');
+            $('#game-area').removeClass('hidden');
+            if (!options.isHostWaiting) { // Don't animate if host is just setting up the board
+                playIntroAnimation(); 
+            }
+            if (!options.isHostWaiting) {
+                 playSound('gameStart');
+            }
             
+            updateGameUi(false, null);
+
             // Per request, hide flip button after game starts and manage share button
             $('#flip-board-btn').hide();
             if (mode === 'online') { 
@@ -409,16 +424,23 @@
             playerColor = 'w';
 
             // Show board and modal immediately for the host
-            startGame('online', { color: 'w' });
+            startGame('online', { color: 'w', isHostWaiting: true });
             
             const joinLink = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
             $('#room-code-display').text(roomCode);
-            $('#create-room-modal .modal-content p').text('Share this code or link with your friend. The game will start when they join.');
-            $('#copy-code-btn').off('click').on('click', () => { navigator.clipboard.writeText(joinLink).then(() => alert('Join link copied!')); });
-            
+            $('#copy-code-btn').off('click').on('click', () => { navigator.clipboard.writeText(joinLink).then(() => {
+                const btn = $('#copy-code-btn');
+                const originalText = btn.html();
+                btn.html('<i class="fas fa-check"></i> Link Copied!').css('background-color', 'var(--success-color)');
+                setTimeout(() => {
+                    btn.html(originalText).css('background-color', '');
+                }, 2000);
+             }); 
+            });
             hideModal('#online-modal', () => showModal('#create-room-modal'));
 
             const initialRoomState = { status: 'waiting', fen: new Chess().fen(), rematchOffer: null, undoRequest: null, createdAt: firebase.database.ServerValue.TIMESTAMP };
+            
             roomRef.set(initialRoomState).then(() => {
                 roomRef.onDisconnect().remove();
                 
@@ -426,9 +448,11 @@
                 const joinListener = roomRef.on('value', snapshot => {
                     const data = snapshot.val();
                     if (data && data.status === 'active') {
-                        roomRef.off('value', joinListener); // Stop this listener
-                        hideModal('#create-room-modal'); // Hide waiting modal
-                        // The main game listener `listenToRoomChanges` is already active from startGame()
+                        roomRef.off('value', joinListener); // Stop this specific listener
+                        playSound('gameStart'); // Play start sound when opponent joins
+                        hideModal('#create-room-modal');
+                        startTimers(); // Start the timer for the host
+                        updateStatusText(); // Update status from "Waiting..." to "White to move."
                     }
                 });
             }).catch(err => { alert("Error creating room: " + err.message); });
@@ -544,7 +568,7 @@
         $('#play-again-btn').on('click', () => { hideModal('#game-over-modal', () => { $('#game-area').addClass('hidden'); showModal('#game-mode-modal'); cleanupAndResetState(); }); });
         
         $('#flip-board-btn').on('click', () => board.flip());
-        $('#new-game-btn').on('click', () => { if(confirm('Go to main menu? This will end the current match.')){ handleDisconnection("New game started."); $('#game-area').addClass('hidden'); showModal('#game-mode-modal'); cleanupAndResetState(); }});
+        $('#new-game-btn').on('click', () => { if(confirm('Go to main menu? This will end the current match.')){ if (roomRef) roomRef.remove(); handleDisconnection("New game started."); $('#game-area').addClass('hidden'); showModal('#game-mode-modal'); cleanupAndResetState(); }});
         $('#resign-btn').on('click', () => { if(game.game_over()) return; if(confirm('Resign the game?')){ const resignMessage = `${playerColor === 'w' ? 'Black' : 'White'} wins by resignation.`; if(gameMode === 'online' && roomRef) { roomRef.update({ status: 'finished', result: resignMessage, fen: game.fen() }); } else { handleLocalGameOver(resignMessage);}}});
         $('#draw-btn').on('click', () => { alert('Draw functionality is not implemented in this version.'); });
         
